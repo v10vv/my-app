@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>دولاب الحظ - تطبيق ربح</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { font-family: 'Noto Kufi Arabic', sans-serif; }
+        body { background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); }
+        .sidebar { background: linear-gradient(180deg, #667eea 0%, #764ba2 100%); min-height: 100vh; position: fixed; right: 0; top: 0; width: 280px; z-index: 1000; transform: translateX(100%); transition: transform 0.3s ease; }
+        .sidebar.active { transform: translateX(0); }
+        .main-content { margin-right: 0; transition: margin-right 0.3s ease; }
+        .main-content.sidebar-open { margin-right: 280px; }
+        .sidebar-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); z-index: 999; opacity: 0; visibility: hidden; transition: all 0.3s ease; }
+        .sidebar-overlay.active { opacity: 1; visibility: visible; }
+        .nav-item { transition: all 0.3s ease; border-radius: 12px; margin: 4px 8px; }
+        .nav-item:hover { background: rgba(255, 255, 255, 0.1); transform: translateX(-5px); }
+        .nav-item.active { background: rgba(255, 255, 255, 0.2); border-right: 4px solid #FFD700; }
+        .wheel-container { background: white; border-radius: 20px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1); padding: 40px; text-align: center; position: relative; overflow: hidden; }
+        .wheel-container::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 4px; background: linear-gradient(90deg, #FFD700, #FFA500, #FF6347, #9370DB, #FFD700); }
+        .fortune-wheel { width: 300px; height: 300px; margin: 0 auto 30px; position: relative; border-radius: 50%; background: conic-gradient(#FFD700 0 60deg, #FFA500 60deg 120deg, #FF6347 120deg 180deg, #9370DB 180deg 240deg, #4CAF50 240deg 300deg, #2196F3 300deg 360deg); box-shadow: 0 0 30px rgba(0, 0, 0, 0.3); }
+        .fortune-wheel::before { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 20px; height: 20px; background: white; border-radius: 50%; z-index: 10; box-shadow: 0 0 10px rgba(0, 0, 0, 0.3); }
+        .wheel-pointer { position: absolute; top: -20px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 15px solid transparent; border-right: 15px solid transparent; border-top: 30px solid #ff4757; z-index: 5; }
+        .wheel-sections { position: absolute; width: 100%; height: 100%; border-radius: 50%; }
+        .wheel-section { position: absolute; width: 50%; height: 50%; transform-origin: 100% 100%; display: flex; align-items: center; justify-content: center; font-weight: bold; color: white; text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5); }
+        .spin-button { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 15px 40px; border-radius: 50px; font-size: 18px; font-weight: bold; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4); }
+        .spin-button:hover { transform: translateY(-3px); box-shadow: 0 8px 25px rgba(102, 126, 234, 0.6); }
+        .spin-button:disabled { background: #ccc; cursor: not-allowed; transform: none; box-shadow: none; }
+        .daily-status { background: linear-gradient(135deg, #ff6b6b, #ee5a24); color: white; padding: 20px; border-radius: 15px; margin-bottom: 30px; text-align: center; }
+        .countdown-timer { background: rgba(255, 255, 255, 0.2); padding: 10px 20px; border-radius: 25px; display: inline-block; margin-top: 10px; font-size: 18px; font-weight: bold; }
+        .prizes-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-top: 30px; }
+        .prize-card { background: white; border-radius: 12px; padding: 15px; text-align: center; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1); transition: all 0.3s ease; }
+        .prize-card:hover { transform: translateY(-3px); box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15); }
+        .prize-icon { font-size: 2rem; margin-bottom: 10px; }
+        .prize-value { font-size: 18px; font-weight: bold; color: #667eea; }
+        .prize-probability { font-size: 12px; color: #666; margin-top: 5px; }
+        .mobile-menu-btn { position: fixed; top: 20px; right: 20px; z-index: 1001; background: #667eea; color: white; border: none; border-radius: 50%; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3); }
+        @media (min-width: 768px) { .sidebar { transform: translateX(0); } .main-content { margin-right: 280px; } .mobile-menu-btn { display: none; } }
+        .floating-points { position: fixed; pointer-events: none; z-index: 9999; color: #FFD700; font-weight: bold; font-size: 24px; animation: floatUp 3s ease-out forwards; }
+        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-150px) scale(1.5); } }
+        .confetti { position: fixed; width: 10px; height: 10px; background: #FFD700; animation: confetti-fall 3s linear infinite; }
+        @keyframes confetti-fall { 0% { transform: translateY(-100vh) rotate(0deg); opacity: 1; } 100% { transform: translateY(100vh) rotate(720deg); opacity: 0; } }
+    </style>
+</head>
+<body>
+    <button class="mobile-menu-btn" data-action="toggle-sidebar"><i class="fas fa-bars"></i></button>
+    <div class="sidebar-overlay"></div>
+    <div class="sidebar">
+        <div class="p-6">
+            <div class="text-center mb-8">
+                <h1 class="text-3xl font-bold text-white mb-2">ربح</h1>
+                <p class="text-white/80 text-sm">تطبيق ربح المال</p>
+            </div>
+            <div class="bg-white/10 backdrop-blur-sm rounded-lg p-4 mb-6">
+                <div class="flex items-center">
+                    <div class="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center mr-3"><i class="fas fa-user text-white text-xl"></i></div>
+                    <div>
+                        <div class="username text-white font-medium"></div>
+                        <div class="text-white/70 text-sm"><span class="user-points">0</span> نقطة</div>
+                    </div>
+                </div>
+            </div>
+            <nav class="space-y-2">
+                <a href="dashboard.html" class="nav-item flex items-center py-3 px-4 text-white/80 hover:text-white"><i class="fas fa-tachometer-alt ml-3"></i>لوحة التحكم</a>
+                <a href="ads.html" class="nav-item flex items-center py-3 px-4 text-white/80 hover:text-white"><i class="fas fa-video ml-3"></i>مشاهدة الإعلانات</a>
+                <a href="wheel.html" class="nav-item active flex items-center py-3 px-4 text-white"><i class="fas fa-gift ml-3"></i>دولاب الحظ</a>
+                <a href="apps.html" class="nav-item flex items-center py-3 px-4 text-white/80 hover:text-white"><i class="fas fa-download ml-3"></i>تحميل التطبيقات</a>
+                <a href="withdraw.html" class="nav-item flex items-center py-3 px-4 text-white/80 hover:text-white"><i class="fas fa-money-bill-wave ml-3"></i>سحب الأموال</a>
+                <a href="profile.html" class="nav-item flex items-center py-3 px-4 text-white/80 hover:text-white"><i class="fas fa-user-cog ml-3"></i>الإعدادات</a>
+                <button class="logout-btn nav-item w-full flex items-center py-3 px-4 text-white/80 hover:text-white" data-action="logout"><i class="fas fa-sign-out-alt ml-3"></i>تسجيل الخروج</button>
+            </nav>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="p-4 md:p-8">
+            <div class="mb-8">
+                <h1 class="text-3xl font-bold text-gray-800 mb-2">دولاب الحظ</h1>
+                <p class="text-gray-600">أدر دولاب الحظ اليومي للحصول على نقاط إضافية ومفاجآت مميزة</p>
+            </div>
+
+            <div class="daily-status">
+                <h3 class="font-bold text-xl mb-2">دورانك اليومي</h3>
+                <p class="text-sm opacity-90 mb-3">يمكنك الدوران مرة واحدة كل 24 ساعة</p>
+                <div id="spinStatus">
+                    <button id="spinButton" class="spin-button" data-action="spin-wheel">
+                        <i class="fas fa-play ml-2"></i>
+                        ابدأ الدوران
+                    </button>
+                </div>
+                <div id="countdown" class="countdown-timer" style="display: none;">
+                    <i class="fas fa-clock ml-2"></i>
+                    <span id="timer">23:59:59</span>
+                </div>
+            </div>
+
+            <div class="wheel-container">
+                <div style="position: relative; display: inline-block;">
+                    <div class="wheel-pointer"></div>
+                    <div id="fortuneWheel" class="fortune-wheel">
+                        <div class="wheel-sections">
+                            <div class="wheel-section" style="transform: rotate(0deg);"><span style="transform: rotate(30deg);">5</span></div>
+                            <div class="wheel-section" style="transform: rotate(60deg);"><span style="transform: rotate(90deg);">10</span></div>
+                            <div class="wheel-section" style="transform: rotate(120deg);"><span style="transform: rotate(150deg);">15</span></div>
+                            <div class="wheel-section" style="transform: rotate(180deg);"><span style="transform: rotate(210deg);">25</span></div>
+                            <div class="wheel-section" style="transform: rotate(240deg);"><span style="transform: rotate(270deg);">50</span></div>
+                            <div class="wheel-section" style="transform: rotate(300deg);"><span style="transform: rotate(330deg);">100</span></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-6">
+                    <h3 class="text-xl font-bold text-gray-800 mb-4">الجوائز المتاحة</h3>
+                    <div class="prizes-grid">
+                        <!-- Populated by main.js logic if needed, but static is fine -->
+                    </div>
+                </div>
+
+                <div class="mt-8">
+                    <h3 class="text-xl font-bold text-gray-800 mb-4">سجل الجوائز الأخيرة</h3>
+                    <div id="prizeHistory" class="bg-gray-50 rounded-lg p-4">
+                        <!-- Populated by main.js -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK - أضف هذه السكربتات أولاً -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+    <!-- كود إعداد Firebase الخاص بك -->
+    <script>
+      // هام جداً: استبدل هذا الكائن بالكود الذي حصلت عليه من مشروعك في Firebase
+      const firebaseConfig = {
+        apiKey: "AIzaSy...",
+        authDomain: "your-project-id.firebaseapp.com",
+        projectId: "your-project-id",
+        storageBucket: "your-project-id.appspot.com",
+        messagingSenderId: "1234567890",
+        appId: "1:1234567890:web:abcdef123456"
+      };
+
+      // تهيئة Firebase
+      if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+      }
+      
+      const auth = firebase.auth();
+      const db = firebase.firestore();
+      console.log("Firebase Initialized in wheel.html");
+    </script>
+
+    <script src="main.js"></script>
+</body>
+</html>

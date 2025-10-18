@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة التحكم - تطبيق ربح</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { font-family: 'Noto Kufi Arabic', sans-serif; }
+        body { background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); }
+        .sidebar { background: linear-gradient(180deg, #667eea 0%, #764ba2 100%); min-height: 100vh; position: fixed; right: 0; top: 0; width: 280px; z-index: 1000; transform: translateX(100%); transition: transform 0.3s ease; }
+        .sidebar.active { transform: translateX(0); }
+        .main-content { margin-right: 0; transition: margin-right 0.3s ease; }
+        .main-content.sidebar-open { margin-right: 280px; }
+        .sidebar-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); z-index: 999; opacity: 0; visibility: hidden; transition: all 0.3s ease; }
+        .sidebar-overlay.active { opacity: 1; visibility: visible; }
+        .nav-item { transition: all 0.3s ease; border-radius: 12px; margin: 4px 8px; }
+        .nav-item:hover { background: rgba(255, 255, 255, 0.1); transform: translateX(-5px); }
+        .nav-item.active { background: rgba(255, 255, 255, 0.2); border-right: 4px solid #FFD700; }
+        .stats-card { background: white; border-radius: 16px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08); transition: all 0.3s ease; position: relative; overflow: hidden; }
+        .stats-card:hover { transform: translateY(-5px); box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12); }
+        .stats-card::before { content: ''; position: absolute; top: 0; right: 0; width: 4px; height: 100%; background: linear-gradient(180deg, #667eea, #764ba2); }
+        .points-counter { background: linear-gradient(135deg, #FFD700, #FFA500); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; font-weight: bold; }
+        .quick-action { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); transition: all 0.3s ease; cursor: pointer; }
+        .quick-action:hover { transform: translateY(-3px) scale(1.02); box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3); }
+        .activity-item { transition: all 0.3s ease; border-radius: 12px; }
+        .activity-item:hover { background: rgba(102, 126, 234, 0.05); transform: translateX(-5px); }
+        .chart-container { background: white; border-radius: 16px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08); padding: 20px; }
+        .mobile-menu-btn { position: fixed; top: 20px; right: 20px; z-index: 1001; background: #667eea; color: white; border: none; border-radius: 50%; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3); }
+        @media (min-width: 768px) { .sidebar { transform: translateX(0); } .main-content { margin-right: 280px; } .mobile-menu-btn { display: none; } }
+        .floating-points { position: fixed; pointer-events: none; z-index: 9999; color: #FFD700; font-weight: bold; font-size: 18px; animation: floatUp 2s ease-out forwards; }
+        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-100px) scale(1.2); } }
+    </style>
+</head>
+<body>
+    <!-- زر القائمة للموبايل -->
+    <button class="mobile-menu-btn">
+        <i class="fas fa-bars"></i>
+    </button>
+
+    <!-- طبقة الخلفية للقائمة -->
+    <div class="sidebar-overlay"></div>
+
+    <!-- الشريط الجانبي -->
+    <div class="sidebar">
+        <div class="p-6">
+            <div class="text-center mb-8">
+                <h1 class="text-3xl font-bold text-white mb-2">ربح</h1>
+                <p class="text-white/80 text-sm">تطبيق ربح المال</p>
+            </div>
+            <div class="bg-white/10 backdrop-blur-sm rounded-lg p-4 mb-6">
+                <div class="flex items-center">
+                    <div class="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center mr-3"><i class="fas fa-user text-white text-xl"></i></div>
+                    <div>
+                        <div class="username text-white font-medium"></div>
+                        <div class="text-white/70 text-sm"><span class="user-points">0</span> نقطة</div>
+                    </div>
+                </div>
+            </div>
+            <nav class="space-y-2">
+                <a href="dashboard.html" class="nav-item active flex items-center py-3 px-4 text-white"><i class="fas fa-tachometer-alt ml-3"></i>لوحة التحكم</a>
+                <a href="ads.html" class="nav-item flex items-center py-3 px-4 text-white/80 hover:text-white"><i class="fas fa-video ml-3"></i>مشاهدة الإعلانات</a>
+                <a href="wheel.html" class="nav-item flex items-center py-3 px-4 text-white/80 hover:text-white"><i class="fas fa-gift ml-3"></i>دولاب الحظ</a>
+                <a href="apps.html" class="nav-item flex items-center py-3 px-4 text-white/80 hover:text-white"><i class="fas fa-download ml-3"></i>تحميل التطبيقات</a>
+                <a href="withdraw.html" class="nav-item flex items-center py-3 px-4 text-white/80 hover:text-white"><i class="fas fa-money-bill-wave ml-3"></i>سحب الأموال</a>
+                <a href="profile.html" class="nav-item flex items-center py-3 px-4 text-white/80 hover:text-white"><i class="fas fa-user-cog ml-3"></i>الإعدادات</a>
+                <button class="logout-btn nav-item w-full flex items-center py-3 px-4 text-white/80 hover:text-white"><i class="fas fa-sign-out-alt ml-3"></i>تسجيل الخروج</button>
+            </nav>
+        </div>
+    </div>
+
+    <!-- المحتوى الرئيسي -->
+    <div class="main-content">
+        <div class="p-4 md:p-8">
+            <div class="mb-8">
+                <h1 class="text-3xl font-bold text-gray-800 mb-2">مرحباً بك، <span class="username"></span></h1>
+                <p class="text-gray-600">إليك نظرة عامة على نشاطك اليومي</p>
+            </div>
+
+            <!-- بطاقات الإحصائيات -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="stats-card p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm mb-1">رصيد النقاط</p>
+                            <p class="points-counter text-2xl font-bold"><span class="user-points">0</span></p>
+                        </div>
+                        <div class="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center"><i class="fas fa-coins text-yellow-600 text-xl"></i></div>
+                    </div>
+                </div>
+                <div class="stats-card p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm mb-1">الإعلانات المشاهدة</p>
+                            <p class="text-2xl font-bold text-blue-600" id="adsWatched">0</p>
+                        </div>
+                        <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center"><i class="fas fa-video text-blue-600 text-xl"></i></div>
+                    </div>
+                </div>
+                <div class="stats-card p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm mb-1">التطبيقات المحملة</p>
+                            <p class="text-2xl font-bold text-green-600" id="appsDownloaded">0</p>
+                        </div>
+                        <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center"><i class="fas fa-download text-green-600 text-xl"></i></div>
+                    </div>
+                </div>
+                <div class="stats-card p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm mb-1">إجمالي الربح</p>
+                            <p class="text-2xl font-bold text-purple-600">$<span class="total-earned">0.00</span></p>
+                        </div>
+                        <div class="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center"><i class="fas fa-dollar-sign text-purple-600 text-xl"></i></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- الإجراءات السريعة -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                <div class="quick-action rounded-lg p-4 text-center text-white" data-href="ads.html">
+                    <i class="fas fa-video text-2xl mb-2"></i>
+                    <p class="text-sm font-medium">شاهد إعلان</p>
+                </div>
+                <div class="quick-action rounded-lg p-4 text-center text-white" data-href="wheel.html">
+                    <i class="fas fa-gift text-2xl mb-2"></i>
+                    <p class="text-sm font-medium">دولاب الحظ</p>
+                </div>
+                <div class="quick-action rounded-lg p-4 text-center text-white" data-href="apps.html">
+                    <i class="fas fa-download text-2xl mb-2"></i>
+                    <p class="text-sm font-medium">حمل تطبيق</p>
+                </div>
+                <div class="quick-action rounded-lg p-4 text-center text-white" data-href="withdraw.html">
+                    <i class="fas fa-money-bill-wave text-2xl mb-2"></i>
+                    <p class="text-sm font-medium">اسحب أموال</p>
+                </div>
+            </div>
+
+            <!-- المخطط البياني والنشاطات -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="chart-container">
+                    <h3 class="text-lg font-bold text-gray-800 mb-4">إحصائيات الربح</h3>
+                    <div id="earningsChart" style="height: 300px;"></div>
+                </div>
+                <div class="bg-white rounded-lg p-6 shadow-lg">
+                    <h3 class="text-lg font-bold text-gray-800 mb-4">النشاطات الأخيرة</h3>
+                    <div id="recentActivities" class="space-y-3">
+                        <!-- سيتم ملؤها بواسطة main.js -->
+                    </div>
+                </div>
+            </div>
+            <button id="addDataButton">إضافة بيانات إلى الخادم</button>
+            <p id="statusMessage"></p>
+        </div>
+    </div>
+
+    <script>
+      // الحصول على الزر ورسالة الحالة
+      const addDataButton = document.getElementById('addDataButton');
+      const statusMessage = document.getElementById('statusMessage');
+
+      if (addDataButton) {
+          addDataButton.addEventListener('click', async () => {
+              try {
+                  statusMessage.textContent = 'جاري إضافة البيانات...';
+
+                  // Create a new user object
+                  const newUser = {
+                      first: "أحمد",
+                      last: "محمد",
+                      born: 1990
+                  };
+
+                  const response = await fetch('http://localhost:3000/api/users', {
+                      method: 'POST',
+                      headers: {
+                          'Content-Type': 'application/json'
+                      },
+                      body: JSON.stringify(newUser)
+                  });
+
+                  if (!response.ok) {
+                      throw new Error('Network response was not ok');
+                  }
+
+                  const createdUser = await response.json();
+
+                  console.log("تم إضافة مستند بالمعرف: ", createdUser.id);
+                  statusMessage.textContent = `تم إضافة بيانات المستخدم بنجاح! ID: ${createdUser.id}`;
+              } catch (e) {
+                  console.error("خطأ في إضافة المستند: ", e);
+                  statusMessage.textContent = `فشل إضافة البيانات: ${e.message}`;
+              }
+          });
+      } else {
+          console.error("لم يتم العثور على زر 'addDataButton'!");
+      }
+    </script>
+
+    <script src="main.js"></script>
+</body>
+</html>

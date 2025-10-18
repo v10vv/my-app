@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>سحب الأموال - تطبيق ربح</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { font-family: 'Noto Kufi Arabic', sans-serif; }
+        body { background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); }
+        .sidebar { background: linear-gradient(180deg, #667eea 0%, #764ba2 100%); min-height: 100vh; position: fixed; right: 0; top: 0; width: 280px; z-index: 1000; transform: translateX(100%); transition: transform 0.3s ease; }
+        .sidebar.active { transform: translateX(0); }
+        .main-content { margin-right: 0; transition: margin-right 0.3s ease; }
+        .main-content.sidebar-open { margin-right: 280px; }
+        .sidebar-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); z-index: 999; opacity: 0; visibility: hidden; transition: all 0.3s ease; }
+        .sidebar-overlay.active { opacity: 1; visibility: visible; }
+        .nav-item { transition: all 0.3s ease; border-radius: 12px; margin: 4px 8px; }
+        .nav-item:hover { background: rgba(255, 255, 255, 0.1); transform: translateX(-5px); }
+        .nav-item.active { background: rgba(255, 255, 255, 0.2); border-right: 4px solid #FFD700; }
+        .balance-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 20px; padding: 30px; text-align: center; margin-bottom: 30px; position: relative; overflow: hidden; }
+        .balance-amount { font-size: 3rem; font-weight: bold; margin: 10px 0; text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3); }
+        .payment-method { background: white; border-radius: 16px; padding: 20px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08); transition: all 0.3s ease; cursor: pointer; border: 3px solid transparent; }
+        .payment-method:hover { transform: translateY(-3px); box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12); }
+        .payment-method.selected { border-color: #667eea; background: rgba(102, 126, 234, 0.05); }
+        .payment-icon { width: 60px; height: 60px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; color: white; margin: 0 auto 15px; }
+        .orange-money { background: linear-gradient(135deg, #ff6b6b, #ee5a24); }
+        .paypal { background: linear-gradient(135deg, #0070ba, #003087); }
+        .atm-card { background: linear-gradient(135deg, #4CAF50, #2E7D32); }
+        .electronic-wallet { background: linear-gradient(135deg, #9C27B0, #673AB7); }
+        .withdrawal-form { background: white; border-radius: 16px; padding: 30px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08); margin-top: 30px; }
+        .form-input { width: 100%; padding: 15px; border: 2px solid #e2e8f0; border-radius: 12px; font-size: 16px; transition: all 0.3s ease; }
+        .form-input:focus { border-color: #667eea; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); outline: none; }
+        .submit-btn { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 15px 30px; border-radius: 12px; font-size: 18px; font-weight: bold; cursor: pointer; transition: all 0.3s ease; width: 100%; }
+        .submit-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4); }
+        .submit-btn:disabled { background: #ccc; cursor: not-allowed; transform: none; box-shadow: none; }
+        .withdrawal-history { background: white; border-radius: 16px; padding: 30px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08); margin-top: 30px; }
+        .history-item { padding: 15px; border-radius: 12px; margin-bottom: 10px; transition: all 0.3s ease; }
+        .history-item:hover { background: rgba(102, 126, 234, 0.05); }
+        .status-pending { color: #ff9800; } .status-completed { color: #4caf50; } .status-rejected { color: #f44336; }
+        .mobile-menu-btn { position: fixed; top: 20px; right: 20px; z-index: 1001; background: #667eea; color: white; border: none; border-radius: 50%; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3); }
+        @media (min-width: 768px) { .sidebar { transform: translateX(0); } .main-content { margin-right: 280px; } .mobile-menu-btn { display: none; } }
+        .minimum-amount { background: rgba(255, 193, 7, 0.1); border: 1px solid #ffc107; border-radius: 8px; padding: 10px; margin-top: 10px; font-size: 14px; color: #856404; }
+        .success-animation { animation: successPulse 0.6s ease-in-out; }
+        @keyframes successPulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+    </style>
+</head>
+<body>
+    <button class="mobile-menu-btn" data-action="toggle-sidebar"><i class="fas fa-bars"></i></button>
+    <div class="sidebar-overlay"></div>
+    <div class="sidebar">
+        <div class="p-6">
+            <div class="text-center mb-8">
+                <h1 class="text-3xl font-bold text-white mb-2">ربح</h1>
+                <p class="text-white/80 text-sm">تطبيق ربح المال</p>
+            </div>
+            <div class="bg-white/10 backdrop-blur-sm rounded-lg p-4 mb-6">
+                <div class="flex items-center">
+                    <div class="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center mr-3"><i class="fas fa-user text-white text-xl"></i></div>
+                    <div>
+                        <div class="username text-white font-medium"></div>
+                        <div class="text-white/70 text-sm"><span class="user-points">0</span> نقطة</div>
+                    </div>
+                </div>
+            </div>
+            <nav class="space-y-2">
+                <a href="dashboard.html" class="nav-item flex items-center py-3 px-4 text-white/80 hover:text-white"><i class="fas fa-tachometer-alt ml-3"></i>لوحة التحكم</a>
+                <a href="ads.html" class="nav-item flex items-center py-3 px-4 text-white/80 hover:text-white"><i class="fas fa-video ml-3"></i>مشاهدة الإعلانات</a>
+                <a href="wheel.html" class="nav-item flex items-center py-3 px-4 text-white/80 hover:text-white"><i class="fas fa-gift ml-3"></i>دولاب الحظ</a>
+                <a href="apps.html" class="nav-item flex items-center py-3 px-4 text-white/80 hover:text-white"><i class="fas fa-download ml-3"></i>تحميل التطبيقات</a>
+                <a href="withdraw.html" class="nav-item active flex items-center py-3 px-4 text-white"><i class="fas fa-money-bill-wave ml-3"></i>سحب الأموال</a>
+                <a href="profile.html" class="nav-item flex items-center py-3 px-4 text-white/80 hover:text-white"><i class="fas fa-user-cog ml-3"></i>الإعدادات</a>
+                <button class="logout-btn nav-item w-full flex items-center py-3 px-4 text-white/80 hover:text-white" data-action="logout"><i class="fas fa-sign-out-alt ml-3"></i>تسجيل الخروج</button>
+            </nav>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="p-4 md:p-8">
+            <div class="mb-8">
+                <h1 class="text-3xl font-bold text-gray-800 mb-2">سحب الأموال</h1>
+                <p class="text-gray-600">اختر طريقة الدفع المفضلة لديك واسحب أرباحك</p>
+            </div>
+
+            <div class="balance-card">
+                <div class="relative z-10">
+                    <h3 class="text-xl font-bold mb-2">رصيد النقاط</h3>
+                    <div class="balance-amount"><span class="user-points">0</span> <span class="text-2xl">نقطة</span></div>
+                    <p class="text-sm opacity-90">يمكنك سحب أموالك عند الوصول للحد الأدنى</p>
+                </div>
+            </div>
+
+            <div class="mb-8">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6">اختر طريقة الدفع</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div class="payment-method" data-method="orange_money" data-action="select-method">
+                        <div class="payment-icon orange-money"><i class="fas fa-mobile-alt"></i></div>
+                        <h3 class="font-bold text-lg mb-2">أورنج ماني</h3>
+                        <p class="text-gray-600 text-sm mb-3">الحد الأدنى: 500 نقطة</p>
+                    </div>
+                    <div class="payment-method" data-method="paypal" data-action="select-method">
+                        <div class="payment-icon paypal"><i class="fab fa-paypal"></i></div>
+                        <h3 class="font-bold text-lg mb-2">بايبال</h3>
+                        <p class="text-gray-600 text-sm mb-3">الحد الأدنى: 1000 نقطة</p>
+                    </div>
+                    <div class="payment-method" data-method="atm_card" data-action="select-method">
+                        <div class="payment-icon atm-card"><i class="fas fa-credit-card"></i></div>
+                        <h3 class="font-bold text-lg mb-2">بطاقة ATM</h3>
+                        <p class="text-gray-600 text-sm mb-3">الحد الأدنى: 2000 نقطة</p>
+                    </div>
+                    <div class="payment-method" data-method="electronic_wallet" data-action="select-method">
+                        <div class="payment-icon electronic-wallet"><i class="fas fa-wallet"></i></div>
+                        <h3 class="font-bold text-lg mb-2">محفظة إلكترونية</h3>
+                        <p class="text-gray-600 text-sm mb-3">الحد الأدنى: 1000 نقطة</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="withdrawal-form" id="withdrawalForm" style="display: none;">
+                <h3 class="text-xl font-bold text-gray-800 mb-6">معلومات السحب</h3>
+                <form id="withdrawForm" data-action="submit-withdrawal">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-gray-700 font-medium mb-2">المبلغ (بالنقاط)</label>
+                            <input type="number" id="amount" class="form-input" placeholder="أدخل المبلغ المراد سحبه" required>
+                            <div class="minimum-amount" id="minAmount" style="display: none;">الحد الأدنى للسحب: <span id="minAmountValue">0</span> نقطة</div>
+                        </div>
+                        <div id="paymentDetails"></div>
+                    </div>
+                    <div class="mt-6">
+                        <div class="bg-gray-50 rounded-lg p-4 mb-4">
+                            <h4 class="font-medium text-gray-800 mb-2">ملخص الطلب</h4>
+                            <div class="flex justify-between items-center"><span>المبلغ:</span><span id="summaryAmount" class="font-bold">0 نقطة</span></div>
+                            <div class="flex justify-between items-center"><span>طريقة الدفع:</span><span id="summaryMethod" class="font-bold">-</span></div>
+                            <div class="flex justify-between items-center text-green-600 font-bold"><span>المبلغ بالدولار:</span><span id="summaryDollar">$0.00</span></div>
+                        </div>
+                        <button type="submit" class="submit-btn"><i class="fas fa-paper-plane ml-2"></i>إرسال طلب السحب</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="withdrawal-history">
+                <h3 class="text-xl font-bold text-gray-800 mb-6">سجل طلبات السحب</h3>
+                <div id="withdrawalHistory">
+                    <!-- Populated by main.js -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK - أضف هذه السكربتات أولاً -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+    <!-- كود إعداد Firebase الخاص بك -->
+    <script>
+      // هام جداً: استبدل هذا الكائن بالكود الذي حصلت عليه من مشروعك في Firebase
+      const firebaseConfig = {
+        apiKey: "AIzaSy...",
+        authDomain: "your-project-id.firebaseapp.com",
+        projectId: "your-project-id",
+        storageBucket: "your-project-id.appspot.com",
+        messagingSenderId: "1234567890",
+        appId: "1:1234567890:web:abcdef123456"
+      };
+
+      // تهيئة Firebase
+      if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+      }
+      
+      const auth = firebase.auth();
+      const db = firebase.firestore();
+      console.log("Firebase Initialized in withdraw.html");
+    </script>
+
+    <script src="main.js"></script>
+</body>
+</html>
