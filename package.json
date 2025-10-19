@@ -12,6 +12,7 @@
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^5.1.0",
+    "firebase": "^12.4.0",
     "lowdb": "^1.0.0"
   }
 }

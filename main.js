@@ -1,17 +1,24 @@
-// تطبيق ربح المال - الجافاسكريبت الرئيسي
+
+// تطبيق ربح المال - الجافاسكريبت الرئيسي (مع دعم Firebase)
 class MoneyApp {
     constructor() {
-        this.currentUser = null;
-        this.users = JSON.parse(localStorage.getItem('moneyAppUsers')) || {};
-        
-        // State for different pages
-        this.isSpinning = false;
-        this.selectedWithdrawalMethod = null;
-        this.currentAdCategory = 'all';
-        this.appsData = [];
-        this.adsData = [];
+        // التحقق من تهيئة Firebase
+        if (typeof firebase === 'undefined') {
+            console.error("Firebase is not initialized. Make sure the config is correct in your HTML file.");
+            this.showNotification('خطأ فادح: لم يتم تهيئة Firebase!', 'error');
+            return;
+        }
 
-        // Static Data
+        this.auth = firebase.auth();
+        this.db = firebase.firestore();
+        this.currentUser = null; // سيحتوي على كائن المصادقة من Firebase
+        this.userData = null; // سيحتوي على بيانات المستخدم من Firestore
+        this.userUnsubscribe = null; // للاستماع لتحديثات المستخدم
+
+        // الحالة
+        this.isSpinning = false;
+
+        // البيانات الثابتة
         this.wheelPrizes = [
             { points: 5, probability: 30 }, { points: 10, probability: 25 },
             { points: 15, probability: 20 }, { points: 25, probability: 15 },
@@ -27,277 +34,363 @@ class MoneyApp {
         this.init();
     }
 
-    async init() {
-        this.loadUserData();
+    init() {
         this.setupEventListeners();
-        await this.loadPageData();
-        this.updateUserInterface();
+        this.handleAuthStateChange();
     }
 
     // =================================================================
-    // AUTH & DATA (SERVER SIMULATION)
+    // AUTH & DATA (FIREBASE)
     // =================================================================
 
-    registerUser(username, email, phone, password) {
-        if (this.users[email]) {
-            this.showNotification('هذا البريد الإلكتروني مسجل بالفعل', 'error');
-            return false;
+    handleAuthStateChange() {
+        this.auth.onAuthStateChanged(async (user) => {
+            if (this.userUnsubscribe) this.userUnsubscribe(); // إيقاف الاستماع السابق
+
+            const currentPage = window.location.pathname.split('/').pop();
+            const isAuthPage = currentPage === 'index.html' || currentPage === '';
+
+            if (user) {
+                this.currentUser = user;
+                // الاستماع لتحديثات بيانات المستخدم في الوقت الفعلي
+                this.userUnsubscribe = this.db.collection('users').doc(user.uid).onSnapshot(doc => {
+                    if (doc.exists) {
+                        this.userData = { uid: user.uid, ...doc.data() };
+                        this.updateUserInterface();
+                        this.loadPageData(); // تحميل بيانات الصفحة بعد الحصول على بيانات المستخدم
+                    } else {
+                        // حالة نادرة: مستخدم مسجل ولكن ليس له ملف شخصي
+                        console.error("User is authenticated but has no profile data.");
+                        this.logout();
+                    }
+                }, error => {
+                    console.error("Error fetching user data:", error);
+                    this.showNotification('خطأ في تحميل بيانات المستخدم', 'error');
+                });
+
+                if (isAuthPage) {
+                    window.location.href = 'dashboard.html';
+                }
+            } else {
+                this.currentUser = null;
+                this.userData = null;
+                if (!isAuthPage) {
+                    window.location.href = 'index.html';
+                }
+            }
+        });
+    }
+
+    async registerUser(username, email, phone, password) {
+        try {
+            const userCredential = await this.auth.createUserWithEmailAndPassword(email, password);
+            const user = userCredential.user;
+
+            // إنشاء ملف المستخدم في Firestore
+            const newUserProfile = {
+                username,
+                email,
+                phone,
+                points: 0,
+                totalEarned: 0,
+                lastSpin: null,
+                watchedAds: [],
+                downloadedApps: [],
+                withdrawalRequests: [],
+                joinDate: firebase.firestore.FieldValue.serverTimestamp(),
+                activity: [{ type: 'system', title: 'إنشاء حساب', points: 0, date: new Date().toISOString() }],
+                prizeHistory: [],
+                paymentMethods: [],
+                settings: { notifications: true, email: true, sound: true }
+            };
+
+            await this.db.collection('users').doc(user.uid).set(newUserProfile);
+            this.showNotification('تم التسجيل بنجاح! جاري تسجيل الدخول...', 'success');
+            // onAuthStateChanged سيتولى الباقي
+        } catch (error) {
+            console.error("Registration Error:", error);
+            this.showNotification(this.getFirebaseAuthErrorMessage(error), 'error');
         }
-        this.users[email] = {
-            username, email, phone, password,
-            points: 0, totalEarned: 0, lastSpin: null,
-            watchedAds: [], downloadedApps: [], withdrawalRequests: [],
-            joinDate: new Date().toISOString(),
-            activity: [{ type: 'system', title: 'إنشاء حساب', points: 0, date: new Date().toISOString() }],
-            prizeHistory: [],
-            paymentMethods: [],
-            settings: { notifications: true, email: true, sound: true }
-        };
-        this.saveUsers();
-        this.showNotification('تم التسجيل بنجاح! جاري تسجيل الدخول...', 'success');
-        setTimeout(() => this.loginUser(email, password), 1500);
-        return true;
     }
 
-    loginUser(email, password) {
-        const user = this.users[email];
-        if (user && user.password === password) {
-            this.currentUser = user;
-            localStorage.setItem('currentUser', JSON.stringify(user));
+    async loginUser(email, password) {
+        try {
+            await this.auth.signInWithEmailAndPassword(email, password);
             this.showNotification('تم تسجيل الدخول بنجاح!', 'success');
-            setTimeout(() => { window.location.href = 'dashboard.html'; }, 1000);
-            return true;
-        }
-        this.showNotification('البريد الإلكتروني أو كلمة المرور غير صحيحة', 'error');
-        return false;
-    }
-
-    logout() {
-        this.currentUser = null;
-        localStorage.removeItem('currentUser');
-        window.location.href = 'index.html';
-    }
-
-    deleteAccount() {
-        if (!this.currentUser) return;
-        delete this.users[this.currentUser.email];
-        this.saveUsers();
-        this.logout();
-    }
-
-    loadUserData() {
-        const savedUser = localStorage.getItem('currentUser');
-        const currentPage = window.location.pathname.split('/').pop();
-        
-        if (savedUser) {
-            this.currentUser = JSON.parse(savedUser);
-            if (currentPage === 'index.html' || currentPage === '') {
-                window.location.href = 'dashboard.html'; // Redirect logged-in users away from index
-            }
-        } else {
-            if (currentPage !== 'index.html' && currentPage !== '') {
-                window.location.href = 'index.html'; // Redirect non-logged-in users to index
-            }
+            // onAuthStateChanged سيتولى الباقي
+        } catch (error) {
+            console.error("Login Error:", error);
+            this.showNotification(this.getFirebaseAuthErrorMessage(error), 'error');
         }
     }
 
-    saveCurrentUser() {
-        if (!this.currentUser) return;
-        this.users[this.currentUser.email] = this.currentUser;
-        this.saveUsers();
-        localStorage.setItem('currentUser', JSON.stringify(this.currentUser));
+    async logout() {
+        await this.auth.signOut();
+        // onAuthStateChanged سيتولى الباقي
     }
     
-    saveUsers() {
-        localStorage.setItem('moneyAppUsers', JSON.stringify(this.users));
+    async deleteAccount() {
+        if (!this.currentUser) return;
+        try {
+            // يمكنك إضافة منطق لحذف بيانات المستخدم من Firestore هنا إذا أردت
+            await this.db.collection('users').doc(this.currentUser.uid).delete();
+            await this.currentUser.delete();
+            this.showNotification('تم حذف الحساب بنجاح.', 'success');
+        } catch (error) {
+            console.error("Delete Account Error:", error);
+            this.showNotification('فشل حذف الحساب. قد تحتاج إلى تسجيل الدخول مرة أخرى.', 'error');
+        }
     }
 
-    addActivity(type, title, points) {
+    async addPoints(pointsToAdd, activityType, activityTitle) {
         if (!this.currentUser) return;
-        if (!this.currentUser.activity) this.currentUser.activity = [];
-        this.currentUser.activity.unshift({ type, title, points, date: new Date().toISOString() });
-        if (this.currentUser.activity.length > 20) this.currentUser.activity.pop();
+        const userRef = this.db.collection('users').doc(this.currentUser.uid);
+        
+        const newActivity = {
+            type: activityType,
+            title: activityTitle,
+            points: pointsToAdd,
+            date: new Date().toISOString()
+        };
+
+        try {
+            await userRef.update({
+                points: firebase.firestore.FieldValue.increment(pointsToAdd),
+                totalEarned: firebase.firestore.FieldValue.increment(pointsToAdd),
+                activity: firebase.firestore.FieldValue.arrayUnion(newActivity)
+            });
+            this.showFloatingPoints(`+${pointsToAdd}`);
+        } catch (error) {
+            console.error("Error adding points:", error);
+        }
     }
 
     // =================================================================
-    // PAGE LOADER
+    // PAGE LOADERS
     // =================================================================
 
     async loadPageData() {
+        if (!this.userData) return; // لا تقم بتحميل أي شيء إذا لم تكن بيانات المستخدم جاهزة
+
         const page = window.location.pathname.split('/').pop();
         switch (page) {
-            case '':
-            case 'index.html': await this.initIndexPage(); break;
-            case 'dashboard.html': await this.initDashboardPage(); break;
-            case 'apps.html': await this.initAppsPage(); break;
-            case 'ads.html': await this.initAdsPage(); break;
-            case 'wheel.html': await this.initWheelPage(); break;
-            case 'withdraw.html': await this.initWithdrawPage(); break;
-            case 'profile.html': await this.initProfilePage(); break;
+            case 'dashboard.html': this.initDashboardPage(); break;
+            case 'apps.html': this.initAppsPage(); break;
+            case 'ads.html': this.initAdsPage(); break;
+            case 'wheel.html': this.initWheelPage(); break;
+            case 'withdraw.html': this.initWithdrawPage(); break;
+            case 'profile.html': this.initProfilePage(); break;
         }
     }
 
-    // =================================================================
-    // INDEX PAGE
-    // =================================================================
-    async initIndexPage() {
-        this.animateElements('.feature-card, .stat-card');
-    }
-
-    async initDashboardPage() {
-        if (!this.currentUser) return;
+    initDashboardPage() {
         this.updateDashboardStats();
         this.animateElements('.stats-card, .quick-action, .chart-container, .bg-white');
     }
 
     updateDashboardStats() {
-        if (!this.currentUser) return;
-        document.getElementById('adsWatched').textContent = this.currentUser.watchedAds?.length || 0;
-        document.getElementById('appsDownloaded').textContent = this.currentUser.downloadedApps?.length || 0;
-        document.querySelector('.total-earned').textContent = this.currentUser.totalEarned.toFixed(2);
-        this.renderActivity();
-        this.renderEarningsChart();
+        if (!this.userData) return;
+        const el = (id) => document.getElementById(id);
+        if(el('adsWatched')) el('adsWatched').textContent = this.userData.watchedAds?.length || 0;
+        if(el('appsDownloaded')) el('appsDownloaded').textContent = this.userData.downloadedApps?.length || 0;
+        const totalEarnedEl = document.querySelector('.total-earned');
+        if(totalEarnedEl) totalEarnedEl.textContent = (this.userData.totalEarned * 0.01).toFixed(2); // Assuming 100 points = $1
+        // TODO: Implement renderActivity and renderEarningsChart
     }
 
-    renderActivity() {
-        // TODO: Implement this function
-    }
-
-    renderEarningsChart() {
-        // TODO: Implement this function
-    }
-
-    showAuthTab(tabToShow) {
-        const loginTab = document.getElementById('loginTab');
-        const registerTab = document.getElementById('registerTab');
-        const loginForm = document.getElementById('loginForm');
-        const registerForm = document.getElementById('registerForm');
-
-        const isLogin = tabToShow === 'login';
-        loginTab.classList.toggle('active', isLogin);
-        registerTab.classList.toggle('active', !isLogin);
-        loginForm.classList.toggle('active', isLogin);
-        registerForm.classList.toggle('active', !isLogin);
-    }
-
-    handleLogin(form) {
-        const email = form.querySelector('#loginEmail').value;
-        const password = form.querySelector('#loginPassword').value;
-        this.loginUser(email, password);
-    }
-
-    handleRegistration(form) {
-        const username = form.querySelector('#registerUsername').value;
-        const email = form.querySelector('#registerEmail').value;
-        const phone = form.querySelector('#registerPhone').value;
-        const password = form.querySelector('#registerPassword').value;
-        const confirmPassword = form.querySelector('#confirmPassword').value;
-
-        if (password !== confirmPassword) {
-            this.showNotification('كلمات المرور غير متطابقة', 'error');
-            return;
-        }
-        this.registerUser(username, email, phone, password);
-    }
-
-    // =================================================================
-    // ADS PAGE
-    // =================================================================
-    async initAdsPage() {
-        // The ad display is now handled by Google AdSense in ads.html
+    initAdsPage() {
         this.updateDailyAdLimit();
     }
 
     updateDailyAdLimit() {
-        if (!this.currentUser || !document.getElementById('adsRemaining')) return;
+        // This is a placeholder as AdSense doesn't provide a direct way to track views via JS for rewards.
+        // This logic should be handled server-side or with more advanced AdSense APIs if available.
         const dailyAdLimit = 20;
-        // The concept of 'watched ads' needs to be re-evaluated with AdSense.
-        // For now, we will leave this as a placeholder.
-        const watchedToday = 0; 
+        const watchedToday = 0;
         const remaining = Math.max(0, dailyAdLimit - watchedToday);
-        
-        document.getElementById('adsRemaining').textContent = remaining;
-        const progress = (watchedToday / dailyAdLimit) * 100;
-        document.getElementById('dailyProgress').style.width = `${progress}%`;
+        const adsRemainingEl = document.getElementById('adsRemaining');
+        const dailyProgressEl = document.getElementById('dailyProgress');
+
+        if(adsRemainingEl) adsRemainingEl.textContent = remaining;
+        if(dailyProgressEl) dailyProgressEl.style.width = `${(watchedToday / dailyAdLimit) * 100}%`;
+    }
+
+    initWheelPage() {
+        this.checkSpinStatus();
+    }
+
+    checkSpinStatus() {
+        if (!this.userData || !document.getElementById('spinButton')) return;
+
+        const spinButton = document.getElementById('spinButton');
+        const countdownDiv = document.getElementById('countdown');
+        const timerSpan = document.getElementById('timer');
+        const twentyFourHours = 24 * 60 * 60 * 1000;
+
+        const lastSpin = this.userData.lastSpin?.toDate(); // تحويل Timestamp إلى Date
+        if (lastSpin && (new Date() - lastSpin < twentyFourHours)) {
+            spinButton.disabled = true;
+            spinButton.style.display = 'none';
+            countdownDiv.style.display = 'inline-block';
+
+            const interval = setInterval(() => {
+                const now = new Date();
+                const timeRemaining = lastSpin.getTime() + twentyFourHours - now.getTime();
+                if (timeRemaining <= 0) {
+                    clearInterval(interval);
+                    spinButton.disabled = false;
+                    spinButton.style.display = 'block';
+                    countdownDiv.style.display = 'none';
+                } else {
+                    const hours = Math.floor(timeRemaining / (1000 * 60 * 60));
+                    const minutes = Math.floor((timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
+                    const seconds = Math.floor((timeRemaining % (1000 * 60)) / 1000);
+                    timerSpan.textContent = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                }
+            }, 1000);
+        } else {
+            spinButton.disabled = false;
+            spinButton.style.display = 'block';
+            countdownDiv.style.display = 'none';
+        }
+    }
+
+    async spinWheel() {
+        if (this.isSpinning || !this.currentUser) return;
+
+        this.isSpinning = true;
+        document.getElementById('spinButton').disabled = true;
+
+        // Check last spin time again just before spinning
+        const userDoc = await this.db.collection('users').doc(this.currentUser.uid).get();
+        const lastSpin = userDoc.data().lastSpin?.toDate();
+        const twentyFourHours = 24 * 60 * 60 * 1000;
+
+        if (lastSpin && (new Date() - lastSpin < twentyFourHours)) {
+            this.showNotification('لقد قمت بالدوران بالفعل اليوم!', 'warning');
+            this.isSpinning = false;
+            document.getElementById('spinButton').disabled = false;
+            this.checkSpinStatus(); // Re-sync timer
+            return;
+        }
+
+        const wheel = document.getElementById('fortuneWheel');
+        const totalProbability = this.wheelPrizes.reduce((sum, prize) => sum + prize.probability, 0);
+        let random = Math.random() * totalProbability;
+        let chosenPrize;
+        for (const prize of this.wheelPrizes) {
+            random -= prize.probability;
+            if (random < 0) {
+                chosenPrize = prize;
+                break;
+            }
+        }
+
+        const prizeIndex = this.wheelPrizes.indexOf(chosenPrize);
+        const degreesPerSection = 360 / this.wheelPrizes.length;
+        const randomOffset = (Math.random() - 0.5) * degreesPerSection * 0.8;
+        const rotation = 360 * 5 - (prizeIndex * degreesPerSection + randomOffset);
+
+        anime({
+            targets: wheel,
+            rotate: rotation,
+            duration: 4000,
+            easing: 'easeOutExpo',
+            complete: async () => {
+                this.showNotification(`تهانينا! لقد ربحت ${chosenPrize.points} نقطة!`, 'success');
+                
+                // Update Firestore
+                const userRef = this.db.collection('users').doc(this.currentUser.uid);
+                await userRef.update({
+                    lastSpin: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                await this.addPoints(chosenPrize.points, 'wheel', `ربح من دولاب الحظ`);
+
+                this.isSpinning = false;
+                this.checkSpinStatus();
+            }
+        });
     }
     
+    initAppsPage() {
+        // TODO: Implement app loading logic
+    }
+    
+    initWithdrawPage() {
+        // TODO: Implement withdrawal logic
+    }
+    
+    initProfilePage() {
+        if (!this.userData) return;
+        const el = (id) => document.getElementById(id);
+        if(el('joinDate')) {
+            const joinDate = this.userData.joinDate?.toDate();
+            if(joinDate) el('joinDate').textContent = joinDate.toLocaleDateString('ar-SA');
+        }
+        if(el('totalAds')) el('totalAds').textContent = this.userData.watchedAds?.length || 0;
+        if(el('totalApps')) el('totalApps').textContent = this.userData.downloadedApps?.length || 0;
+    }
+
     // =================================================================
     // EVENT LISTENERS
     // =================================================================
 
     setupEventListeners() {
-        // Using a single, delegated event listener for clicks
         document.addEventListener('click', e => {
-            const target = e.target;
-            const action = target.closest('[data-action]')?.dataset.action;
-
+            const action = e.target.closest('[data-action]')?.dataset.action;
             if (!action) return;
 
             const actions = {
-                'show-tab': () => this.showAuthTab(target.closest('[data-tab]').dataset.tab),
                 'logout': () => this.logout(),
                 'toggle-sidebar': () => this.toggleSidebar(),
                 'spin-wheel': () => this.spinWheel(),
                 'delete-account': () => this.confirmDeleteAccount(),
-                'open-modal': () => this.openModal(target.closest('[data-modal-id]').dataset.modalId, target.closest('[data-modal-type]')?.dataset.modalType),
-                'close-modal': () => this.closeModal(target.closest('.modal').id),
-                'select-method': () => this.selectPaymentMethod(target.closest('[data-method]').dataset.method),
-                'toggle-setting': () => this.toggleSetting(target.closest('[data-setting]').dataset.setting),
-                // Placeholder actions
-                'change-avatar': () => this.showNotification('ميزة تغيير الصورة الشخصية قريباً!', 'info'),
-                'add-payment-method': () => this.showNotification('ميزة إضافة طرق دفع جديدة قريباً!', 'info'),
-                'show-privacy': () => this.showNotification('سيتم عرض سياسة الخصوصية قريباً', 'info'),
-                'show-terms': () => this.showNotification('سيتم عرض الشروط والأحكام قريباً', 'info'),
-                'show-help': () => this.showNotification('سيتم عرض الأسئلة الشائعة قريباً', 'info'),
-                'contact-support': () => this.showNotification('تواصل معنا على support@example.com', 'info'),
             };
 
-            if (actions[action]) {
-                actions[action]();
-            }
-
-            if (target.matches('.sidebar-overlay')) this.toggleSidebar();
-            
-            const href = target.closest('[data-href]')?.dataset.href;
-            if (href) window.location.href = href;
-
-            const appButton = target.closest('[data-app-id][data-action]');
-            if (appButton) {
-                this.handleAppAction(parseInt(appButton.dataset.appId), appButton.dataset.action);
-            }
+            if (actions[action]) actions[action]();
+            if (e.target.matches('.sidebar-overlay')) this.toggleSidebar();
         });
 
-        // Delegated listener for form submissions
         document.addEventListener('submit', e => {
             e.preventDefault();
-            const action = e.target.closest('[data-action]')?.dataset.action;
+            const form = e.target;
+            const action = form.dataset.action;
             if (!action) return;
 
             const submitActions = {
-                'login': () => this.handleLogin(e.target),
-                'register': () => this.handleRegistration(e.target),
-                'save-personal-info': () => this.savePersonalInfo(e.target),
-                'save-password': () => this.changePassword(e.target),
-                'submit-withdrawal': () => this.handleWithdrawalRequest(e),
+                'login': () => {
+                    const email = form.querySelector('#loginEmail').value;
+                    const password = form.querySelector('#loginPassword').value;
+                    this.loginUser(email, password);
+                },
+                'register': () => {
+                    const username = form.querySelector('#registerUsername').value;
+                    const email = form.querySelector('#registerEmail').value;
+                    const phone = form.querySelector('#registerPhone').value;
+                    const password = form.querySelector('#registerPassword').value;
+                    const confirmPassword = form.querySelector('#confirmPassword').value;
+                    if (password !== confirmPassword) {
+                        this.showNotification('كلمات المرور غير متطابقة', 'error');
+                        return;
+                    }
+                    this.registerUser(username, email, phone, password);
+                },
             };
 
-            if (submitActions[action]) {
-                submitActions[action]();
-            }
-        });
-
-        // Delegated listener for inputs
-        document.addEventListener('input', e => {
-            if (e.target.id === 'amount') {
-                this.updateWithdrawalSummary();
-            }
+            if (submitActions[action]) submitActions[action]();
         });
     }
     
+    confirmDeleteAccount() {
+        if (confirm("هل أنت متأكد أنك تريد حذف حسابك؟ لا يمكن التراجع عن هذا الإجراء.")) {
+            this.deleteAccount();
+        }
+    }
+
     // =================================================================
     // UI, NOTIFICATIONS, ANIMATIONS
     // =================================================================
-    
+
     toggleSidebar() {
         document.querySelector('.sidebar')?.classList.toggle('active');
         document.querySelector('.sidebar-overlay')?.classList.toggle('active');
@@ -305,9 +398,9 @@ class MoneyApp {
     }
 
     updateUserInterface() {
-        if (!this.currentUser) return;
-        document.querySelectorAll('.user-points').forEach(el => el.textContent = this.currentUser.points.toLocaleString('ar-SA'));
-        document.querySelectorAll('.username').forEach(el => el.textContent = this.currentUser.username);
+        if (!this.userData) return;
+        document.querySelectorAll('.user-points').forEach(el => el.textContent = this.userData.points.toLocaleString('ar-SA'));
+        document.querySelectorAll('.username').forEach(el => el.textContent = this.userData.username);
     }
 
     showNotification(message, type = 'info') {
@@ -326,6 +419,18 @@ class MoneyApp {
             setTimeout(() => notification.remove(), 400);
         }, 4000);
     }
+    
+    showFloatingPoints(text) {
+        const floatingEl = document.createElement('div');
+        floatingEl.textContent = text;
+        floatingEl.className = 'floating-points';
+        Object.assign(floatingEl.style, {
+            top: `${Math.random() * 50 + 25}%`,
+            left: `${Math.random() * 50 + 25}%`,
+        });
+        document.body.appendChild(floatingEl);
+        setTimeout(() => floatingEl.remove(), 2000);
+    }
 
     animateElements(selector) {
         if (typeof anime !== 'undefined') {
@@ -336,8 +441,32 @@ class MoneyApp {
             });
         }
     }
+
+    getFirebaseAuthErrorMessage(error) {
+        switch (error.code) {
+            case 'auth/user-not-found':
+            case 'auth/wrong-password':
+                return 'البريد الإلكتروني أو كلمة المرور غير صحيحة.';
+            case 'auth/email-already-in-use':
+                return 'هذا البريد الإلكتروني مسجل بالفعل.';
+            case 'auth/weak-password':
+                return 'كلمة المرور ضعيفة جدًا. يجب أن تتكون من 6 أحرف على الأقل.';
+            case 'auth/invalid-email':
+                return 'البريد الإلكتروني غير صالح.';
+            default:
+                return 'حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.';
+        }
+    }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    window.moneyApp = new MoneyApp();
+    // تأكد من تهيئة Firebase قبل إنشاء التطبيق
+    if (typeof firebase !== 'undefined') {
+        window.moneyApp = new MoneyApp();
+    } else {
+        console.error("Firebase is not available. App initialization failed.");
+        // يمكنك عرض رسالة خطأ للمستخدم هنا
+        const body = document.querySelector('body');
+        if(body) body.innerHTML = '<div style="text-align: center; padding: 50px; font-family: sans-serif; color: red;"><h1>خطأ فادح</h1><p>فشل الاتصال بالخادم. يرجى التحقق من إعدادات Firebase.</p></div>';
+    }
 });
