@@ -39,6 +39,8 @@ class MoneyApp {
         this.handleAuthStateChange();
     }
 
+
+
     // =================================================================
     // AUTH & DATA (FIREBASE)
     // =================================================================
@@ -313,8 +315,145 @@ class MoneyApp {
     }
     
     initAppsPage() {
-        // TODO: Implement app loading logic
-    }
+        this.apps = [
+            { id: 'app01', name: 'متصفح سريع', description: 'متصفح ويب فائق السرعة يحترم خصوصيتك.', icon: 'fa-globe', points: 250, requiredDays: 5, packageName: 'com.fast.browser' },
+            { id: 'app02', name: 'محرر صور', description: 'أضف فلاتر وتأثيرات مذهلة لصورك.', icon: 'fa-camera-retro', points: 300, requiredDays: 5, packageName: 'com.photo.editor' },
+            { id: 'app03', name: 'لعبة ألغاز', description: 'اختبر ذكاءك مع مئات الألغاز الممتعة.', icon: 'fa-puzzle-piece', points: 200, requiredDays: 5, packageName: 'com.puzzle.game' },
+            { id: 'app04', name: 'مدير المهام', description: 'نظم حياتك وزد من إنتاجيتك اليومية.', icon: 'fa-tasks', points: 350, requiredDays: 5, packageName: 'com.task.manager' },
+            { id: 'app05', name: 'تطبيق طقس', description: 'احصل على توقعات دقيقة للطقس في منطقتك.', icon: 'fa-cloud-sun', points: 150, requiredDays: 5, packageName: 'com.weather.app' },
+            { id: 'app06', name: 'قارئ كتب', description: 'استمتع بآلاف الكتب الإلكترونية مجانًا.', icon: 'fa-book-open', points: 280, requiredDays: 5, packageName: 'com.ebook.reader' }
+        ];
+        this.renderApps();
+        this.animateElements('.app-card');
+    },
+
+    renderApps() {
+        const grid = document.getElementById('appsGrid');
+        if (!grid) return;
+
+        grid.innerHTML = ''; // Clear existing content
+        this.apps.forEach(app => {
+            const userApp = this.userData.downloadedApps?.find(da => da.id === app.id);
+            const isCompleted = userApp && userApp.usageDays >= app.requiredDays;
+            const card = document.createElement('div');
+            card.className = `app-card ${isCompleted ? 'completed' : ''}`;
+            card.dataset.appId = app.id;
+
+            let cardContent = `
+                <div class="reward-badge">${app.points} نقطة</div>
+                <div class="p-6 text-center">
+                    <div class="app-icon"><i class="fas ${app.icon}"></i></div>
+                    <h3 class="text-xl font-bold text-gray-800 mb-2">${app.name}</h3>
+                    <p class="text-gray-600 text-sm mb-4">${app.description}</p>
+                </div>
+            `;
+
+            if (userApp) {
+                const progress = Math.min(100, (userApp.usageDays / app.requiredDays) * 100);
+                cardContent += `
+                    <div class="px-6 pb-6">
+                        <div class="usage-tracker">
+                            <p class="text-sm font-medium text-gray-700">الاستخدام اليومي</p>
+                            <div class="days-counter">
+                                ${[...Array(app.requiredDays)].map((_, i) => `
+                                    <div class="day-indicator ${i < userApp.usageDays ? 'completed' : (i === userApp.usageDays ? 'current' : '')}">
+                                        ${i < userApp.usageDays ? '<i class="fas fa-check"></i>' : i + 1}
+                                    </div>
+                                `).join('')}
+                            </div>
+                            <p class="text-xs text-gray-500 mt-2">مطلوب ${app.requiredDays} أيام</p>
+                        </div>
+                        <button class="download-btn mt-4" data-action="open-app" data-package="${app.packageName}" ${isCompleted ? 'disabled' : ''}>
+                            ${isCompleted ? 'المكافأة تم الحصول عليها' : 'افتح التطبيق'}
+                        </button>
+                    </div>
+                `;
+            } else {
+                cardContent += `
+                    <div class="px-6 pb-6">
+                        <button class="download-btn" data-action="download-app" data-app-id="${app.id}">
+                            <i class="fas fa-download mr-2"></i> تحميل ومتابعة
+                        </button>
+                    </div>
+                `;
+            }
+            card.innerHTML = cardContent;
+            grid.appendChild(card);
+        });
+    },
+
+    async handleAppAction(e) {
+        const downloadBtn = e.target.closest('[data-action="download-app"]');
+        const openBtn = e.target.closest('[data-action="open-app"]');
+
+        if (downloadBtn) {
+            const appId = downloadBtn.dataset.appId;
+            const app = this.apps.find(a => a.id === appId);
+            if (!app) return;
+
+            // Simulate download and add to user's profile
+            const newAppEntry = {
+                id: app.id,
+                name: app.name,
+                downloadDate: new Date().toISOString(),
+                lastUsedDate: new Date().toISOString(),
+                usageDays: 1
+            };
+
+            try {
+                await this.db.collection('users').doc(this.currentUser.uid).update({
+                    downloadedApps: firebase.firestore.FieldValue.arrayUnion(newAppEntry)
+                });
+                this.showNotification(`بدأت في تتبع استخدام تطبيق "${app.name}"`, 'info');
+                // The onSnapshot listener will automatically re-render the UI
+            } catch (error) {
+                console.error("Error adding app to user profile:", error);
+                this.showNotification('فشل بدء تتبع التطبيق', 'error');
+            }
+        }
+
+        if (openBtn) {
+            const packageName = openBtn.dataset.package;
+            // This is a placeholder. In a real mobile app, you'd use an intent to open the app.
+            // For a web app, we can simulate usage.
+            this.showNotification(`تم تسجيل استخدام للتطبيق. عد غدًا للمزيد!`, 'success');
+            
+            const appId = openBtn.closest('.app-card').dataset.appId;
+            const appData = this.apps.find(a => a.id === appId);
+            const userApp = this.userData.downloadedApps.find(da => da.id === appId);
+
+            if (userApp && userApp.usageDays < appData.requiredDays) {
+                const now = new Date();
+                const lastUsed = new Date(userApp.lastUsedDate);
+                const hoursSinceLastUse = (now - lastUsed) / (1000 * 60 * 60);
+
+                // Allow usage update once every 22 hours to be safe
+                if (hoursSinceLastUse > 22) {
+                    const updatedApps = this.userData.downloadedApps.map(da => {
+                        if (da.id === appId) {
+                            const newUsageDays = da.usageDays + 1;
+                            if (newUsageDays === appData.requiredDays) {
+                                // Grant points on completion
+                                this.addPoints(appData.points, 'app_reward', `مكافأة إكمال تطبيق ${appData.name}`);
+                                this.showNotification(`تهانينا! لقد حصلت على ${appData.points} نقطة لإكمال مهمة التطبيق.`, 'success');
+                            }
+                            return { ...da, usageDays: newUsageDays, lastUsedDate: now.toISOString() };
+                        }
+                        return da;
+                    });
+
+                    try {
+                        await this.db.collection('users').doc(this.currentUser.uid).update({ downloadedApps: updatedApps });
+                    } catch (error) {
+                        console.error("Error updating app usage:", error);
+                    }
+                } else {
+                    this.showNotification('يمكنك تسجيل الاستخدام مرة واحدة فقط كل 24 ساعة.', 'warning');
+                }
+            }
+        }
+    },
+
     
     initWithdrawPage() {
         // TODO: Implement withdrawal logic
@@ -336,6 +475,7 @@ class MoneyApp {
     // =================================================================
 
     setupEventListeners() {
+        // General click listener for data-actions
         document.addEventListener('click', e => {
             const action = e.target.closest('[data-action]')?.dataset.action;
             if (!action) return;
@@ -349,36 +489,58 @@ class MoneyApp {
 
             if (actions[action]) actions[action]();
             if (e.target.matches('.sidebar-overlay')) this.toggleSidebar();
+
+            this.handleAppAction(e);
         });
 
-        document.addEventListener('submit', e => {
-            e.preventDefault();
-            const form = e.target;
-            const action = form.dataset.action;
-            if (!action) return;
+        // Auth page specific listeners
+        const loginTab = document.getElementById('loginTab');
+        const registerTab = document.getElementById('registerTab');
+        const loginForm = document.getElementById('loginForm');
+        const registerForm = document.getElementById('registerForm');
 
-            const submitActions = {
-                'login': () => {
-                    const email = form.querySelector('#loginEmail').value;
-                    const password = form.querySelector('#loginPassword').value;
-                    this.loginUser(email, password);
-                },
-                'register': () => {
-                    const username = form.querySelector('#registerUsername').value;
-                    const email = form.querySelector('#registerEmail').value;
-                    const phone = form.querySelector('#registerPhone').value;
-                    const password = form.querySelector('#registerPassword').value;
-                    const confirmPassword = form.querySelector('#confirmPassword').value;
-                    if (password !== confirmPassword) {
-                        this.showNotification('كلمات المرور غير متطابقة', 'error');
-                        return;
-                    }
-                    this.registerUser(username, email, phone, password);
-                },
-            };
+        if (loginTab && registerTab && loginForm && registerForm) {
+            // Tab switching logic
+            loginTab.addEventListener('click', () => {
+                loginTab.classList.add('bg-purple-600', 'text-white');
+                loginTab.classList.remove('text-gray-600');
+                registerTab.classList.remove('bg-purple-600', 'text-white');
+                registerTab.classList.add('text-gray-600');
+                loginForm.classList.add('active');
+                registerForm.classList.remove('active');
+            });
 
-            if (submitActions[action]) submitActions[action]();
-        });
+            registerTab.addEventListener('click', () => {
+                registerTab.classList.add('bg-purple-600', 'text-white');
+                registerTab.classList.remove('text-gray-600');
+                loginTab.classList.remove('bg-purple-600', 'text-white');
+                loginTab.classList.add('text-gray-600');
+                registerForm.classList.add('active');
+                loginForm.classList.remove('active');
+            });
+
+            // Form submission listeners
+            loginForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const email = loginForm.querySelector('#loginEmail').value;
+                const password = loginForm.querySelector('#loginPassword').value;
+                this.loginUser(email, password);
+            });
+
+            registerForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const username = registerForm.querySelector('#registerUsername').value;
+                const email = registerForm.querySelector('#registerEmail').value;
+                const phone = registerForm.querySelector('#registerPhone').value;
+                const password = registerForm.querySelector('#registerPassword').value;
+                const confirmPassword = registerForm.querySelector('#confirmPassword').value;
+                if (password !== confirmPassword) {
+                    this.showNotification('كلمات المرور غير متطابقة', 'error');
+                    return;
+                }
+                this.registerUser(username, email, phone, password);
+            });
+        }
     }
     
     confirmDeleteAccount() {
@@ -444,6 +606,8 @@ class MoneyApp {
 
     getFirebaseAuthErrorMessage(error) {
         switch (error.code) {
+            case 'auth/invalid-api-key':
+                return 'خطأ فادح: مفتاح API الخاص بـ Firebase غير صالح. هذا هو سبب المشكلة. يرجى التحقق من الكود في ملف firebase-config.js.';
             case 'auth/user-not-found':
             case 'auth/wrong-password':
                 return 'البريد الإلكتروني أو كلمة المرور غير صحيحة.';
@@ -454,7 +618,8 @@ class MoneyApp {
             case 'auth/invalid-email':
                 return 'البريد الإلكتروني غير صالح.';
             default:
-                return 'حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.';
+                console.error("Firebase Auth Error:", error); // Log the full error for debugging
+                return `حدث خطأ غير متوقع: ${error.code}. يرجى المحاولة مرة أخرى.`;
         }
     }
 }

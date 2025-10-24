@@ -214,7 +214,7 @@
                     </div>
 
                     <!-- نموذج تسجيل الدخول -->
-                    <form id="loginForm" class="auth-form active">
+                    <form id="loginForm" class="auth-form active" data-action="login">
                         <div class="space-y-4">
                             <div>
                                 <label class="block text-gray-700 text-sm font-medium mb-2">البريد الإلكتروني</label>
@@ -235,7 +235,7 @@
                     </form>
 
                     <!-- نموذج إنشاء حساب -->
-                    <form id="registerForm" class="auth-form">
+                    <form id="registerForm" class="auth-form" data-action="register">
                         <div class="space-y-4">
                             <div>
                                 <label class="block text-gray-700 text-sm font-medium mb-2">الاسم الكامل</label>
@@ -302,119 +302,9 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 
     <!-- كود إعداد Firebase الخاص بك -->
-    <script>
-      // هام جداً: استبدل هذا الكائن بالكود الذي حصلت عليه من مشروعك في Firebase
-      const firebaseConfig = {
-  apiKey: "AIzaSyCdUWsl6K4JFaynC6NjSQarbVmVGy9ofiI",
-  authDomain: "mcash1-a6cc3.firebaseapp.com",
-  projectId: "mcash1-a6cc3",
-  storageBucket: "mcash1-a6cc3.firebasestorage.app",
-  messagingSenderId: "566052807173",
-  appId: "1:566052807173:web:1d9aa39875cfd7488af26c",
-  measurementId: "G-54TV709SQQ"
-      };
+    <script src="firebase-config.js"></script>
 
-      // تهيئة Firebase
-      firebase.initializeApp(firebaseConfig);
-      
-      const auth = firebase.auth();
-      const db = firebase.firestore();
-      console.log("Firebase Initialized in index.html");
-    </script>
+    <script type="module" src="main.js"></script>
 
-    <script src="main.js"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const loginTab = document.getElementById('loginTab');
-            const registerTab = document.getElementById('registerTab');
-            const loginForm = document.getElementById('loginForm');
-            const registerForm = document.getElementById('registerForm');
-
-            // تبديل بين النماذج
-            loginTab.addEventListener('click', () => {
-                loginTab.classList.add('bg-purple-600', 'text-white');
-                loginTab.classList.remove('text-gray-600');
-                registerTab.classList.remove('bg-purple-600', 'text-white');
-                registerTab.classList.add('text-gray-600');
-                
-                loginForm.classList.add('active');
-                registerForm.classList.remove('active');
-            });
-
-            registerTab.addEventListener('click', () => {
-                registerTab.classList.add('bg-purple-600', 'text-white');
-                registerTab.classList.remove('text-gray-600');
-                loginTab.classList.remove('bg-purple-600', 'text-white');
-                loginTab.classList.add('text-gray-600');
-                
-                registerForm.classList.add('active');
-                loginForm.classList.remove('active');
-            });
-
-            // معالجة تسجيل الدخول
-            loginForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                const email = document.getElementById('loginEmail').value;
-                const password = document.getElementById('loginPassword').value;
-                
-                if (window.moneyApp) {
-                    window.moneyApp.loginUser(email, password);
-                }
-            });
-
-            // معالجة إنشاء الحساب
-            registerForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                const username = document.getElementById('registerUsername').value;
-                const email = document.getElementById('registerEmail').value;
-                const phone = document.getElementById('registerPhone').value;
-                const password = document.getElementById('registerPassword').value;
-                const confirmPassword = document.getElementById('confirmPassword').value;
-
-                if (password !== confirmPassword) {
-                    if (window.moneyApp) {
-                        window.moneyApp.showNotification('كلمات المرور غير متطابقة', 'error');
-                    }
-                    return;
-                }
-
-                if (window.moneyApp) {
-                    window.moneyApp.registerUser(username, email, phone, password);
-                }
-            });
-
-            // رسوم متحركة للعناصر
-            anime({
-                targets: '.feature-card',
-                translateY: [50, 0],
-                opacity: [0, 1],
-                delay: anime.stagger(200),
-                duration: 800,
-                easing: 'easeOutExpo'
-            });
-
-            anime({
-                targets: '.stat-card',
-                scale: [0.8, 1],
-                opacity: [0, 1],
-                delay: anime.stagger(100),
-                duration: 600,
-                easing: 'easeOutElastic(1, .8)'
-            });
-
-            // تأثيرات على حقول الإدخال
-            const inputs = document.querySelectorAll('.form-input');
-            inputs.forEach(input => {
-                input.addEventListener('focus', () => {
-                    anime({
-                        targets: input,
-                        scale: [1, 1.02, 1],
-                        duration: 300,
-                        easing: 'easeOutQuad'
-                    });
-                });
-            });
-        });
-    </script>
 </body>
 </html>

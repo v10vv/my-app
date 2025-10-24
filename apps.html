@@ -145,26 +145,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 
     <!-- كود إعداد Firebase الخاص بك -->
-    <script>
-      const firebaseConfig = {
-        apiKey: "AIzaSyCdUWsl6K4JFaynC6NjSQarbVmVGy9ofiI",
-        authDomain: "mcash1-a6cc3.firebaseapp.com",
-        projectId: "mcash1-a6cc3",
-        storageBucket: "mcash1-a6cc3.firebasestorage.app",
-        messagingSenderId: "566052807173",
-        appId: "1:566052807173:web:1d9aa39875cfd7488af26c",
-        measurementId: "G-54TV709SQQ"
-      };
-
-      // تهيئة Firebase
-      if (!firebase.apps.length) {
-        firebase.initializeApp(firebaseConfig);
-      }
-      
-      const auth = firebase.auth();
-      const db = firebase.firestore();
-      console.log("Firebase Initialized in apps.html");
-    </script>
+    <script src="firebase-config.js"></script>
 
     <script src="main.js"></script>
 </body>
